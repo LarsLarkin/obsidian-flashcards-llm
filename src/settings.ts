@@ -7,6 +7,7 @@ import FlashcardsLLMPlugin from "./main"
 
 export interface FlashcardsSettings {
   apiKey: string;
+  baseURL: string;
   model: string;
   inlineSeparator: string;
   multilineSeparator: string;
@@ -49,18 +50,32 @@ export class FlashcardsSettingsTab extends PluginSettingTab {
     );
 
     new Setting(containerEl)
-    .setName("Model")
-    .setDesc("Which language model to use")
-    .addDropdown((dropdown) =>
-      dropdown
-	  .addOptions(Object.fromEntries(allAvailableModels().map(k => [k, k])))
-      .setValue(this.plugin.settings.model)
+    .setName("API Base URL (Optional)")
+    .setDesc("Override the base URL to use proxies or local models (e.g. Ollama, Groq).")
+    .addText((text) =>
+      text
+      .setPlaceholder("https.api.openai.com/v1") // Placeholder
+      .setValue(this.plugin.settings.baseURL)
       .onChange(async (value) => {
-        this.plugin.settings.model = value;
-		reasoningEffortSetting.setDisabled(!availableReasoningModels().includes(value));
+        // Remove trailing slash if the user adds it, for consistency
+        this.plugin.settings.baseURL = value.endsWith("/") ? value.slice(0, -1) : value;
         await this.plugin.saveSettings();
       })
     );
+
+ new Setting(containerEl)
+.setName("Model")
+.setDesc("Which language model to use (e.g. gpt-4o, llama3, etc.)")
+.addText((text) => 
+  text
+  .setPlaceholder("gpt-4o-mini")
+  .setValue(this.plugin.settings.model)
+  .onChange(async (value) => {
+    this.plugin.settings.model = value;
+    reasoningEffortSetting.setDisabled(!availableReasoningModels().includes(value)); 
+    await this.plugin.saveSettings();
+  })
+);
 
     const reasoningEffortSetting = new Setting(containerEl)
     .setName("Reasoning Effort")

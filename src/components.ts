@@ -26,11 +26,11 @@ export class InputModal extends Modal {
     let {  contentEl, containerEl, modalEl } = this;
     contentEl.createEl("h1", { text: "Prompt configuration" });
 
-    new Setting(contentEl)
+new Setting(contentEl)
     .setName("Model")
-    .addDropdown((dropdown) =>
-      dropdown
-	  .addOptions(Object.fromEntries(allAvailableModels().map(k => [k, k])))
+    .addText((text) =>
+      text
+      .setPlaceholder("gpt-4o") // <-- This is optional, but it helps the user
       .setValue(this.configuration.model)
       .onChange(async (value) => {
 		reasoningEffortSetting.setDisabled(!availableReasoningModels().includes(value));

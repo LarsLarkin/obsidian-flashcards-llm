@@ -69,6 +69,7 @@ Rules:
 export async function* generateFlashcards(
 	text: string,
 	apiKey: string,
+	baseURL: string,
 	model: string = "gpt-4o",
 	sep: string = "::",
 	flashcardsCount: number = 3,
@@ -81,7 +82,8 @@ export async function* generateFlashcards(
 
 	const openai = new OpenAI({
 		apiKey: apiKey,
-		dangerouslyAllowBrowser: true
+		dangerouslyAllowBrowser: true,
+		baseURL: baseURL || undefined
 	});
 
 	const cleanedText = text.replace(/<!--.*-->[\n]?/g, "");
@@ -103,7 +105,7 @@ the original task): ${additionalInfo}`
 
 	// TODO: use newer client.responses.create endpoint.
 	// TODO: use structured (json) output to enforce flashcards formatting
-	if (chatModels.includes(model) || reasoningModels.includes(model)) {
+	if (baseURL || chatModels.includes(model) || reasoningModels.includes(model)) {
 		response = await openai.chat.completions.create({
 		model: model,
 		...(!isReasoning && { temperature: 0.7 }),

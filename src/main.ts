@@ -11,6 +11,7 @@ import { FlashcardsSettings, FlashcardsSettingsTab } from "./settings"
 
 const DEFAULT_SETTINGS: FlashcardsSettings = {
   apiKey: "",
+  baseURL: "",
   model: "gpt-4o",
   inlineSeparator: "::",
   multilineSeparator: "?",
@@ -80,6 +81,7 @@ export default class FlashcardsLLMPlugin extends Plugin {
   }
 
   async onGenerateFlashcards(editor: Editor, view: MarkdownView, configuration: FlashcardsSettings, multiline: boolean = false) {
+    const baseURL = configuration.baseURL;
     const apiKey = configuration.apiKey;
     if (!apiKey) {
       new Notice("API key is not set in plugin settings");
@@ -129,6 +131,7 @@ export default class FlashcardsLLMPlugin extends Plugin {
       const generatedFlashcards = await generateFlashcards(
         currentText,
         apiKey,
+        baseURL,
         model,
         sep,
         flashcardsCount,

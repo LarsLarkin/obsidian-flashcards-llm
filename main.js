@@ -39,9 +39,6 @@ function availableCompletionModels() {
 function availableReasoningModels() {
   return ["o1", "o1-mini", "o3-mini", "o4-mini"];
 }
-function allAvailableModels() {
-  return availableChatModels().concat(availableReasoningModels(), availableCompletionModels());
-}
 
 // node_modules/openai/internal/tslib.mjs
 function __classPrivateFieldSet(receiver, state, value, kind, f) {
@@ -6488,11 +6485,12 @@ Rules:
 6. Start output immediately with the first card\u2014no headings or commentary.  
 `.trim();
 }
-async function* generateFlashcards(text, apiKey, model = "gpt-4o", sep = "::", flashcardsCount = 3, additionalInfo = "", maxTokens = 300, multiline = false, reasoningEffort, stream = true) {
+async function* generateFlashcards(text, apiKey, baseURL, model = "gpt-4o", sep = "::", flashcardsCount = 3, additionalInfo = "", maxTokens = 300, multiline = false, reasoningEffort, stream = true) {
   var _a3, _b, _c, _d, _e, _f;
   const openai = new OpenAI({
     apiKey,
-    dangerouslyAllowBrowser: true
+    dangerouslyAllowBrowser: true,
+    baseURL: baseURL || void 0
   });
   const cleanedText = text.replace(/<!--.*-->[\n]?/g, "");
   const flashcardText = cleanedText;
@@ -6506,7 +6504,7 @@ Additional instructions for the task (ignore anything unrelated to the original 
   const reasoningModels = availableReasoningModels();
   const isReasoning = reasoningModels.includes(model);
   let response = null;
-  if (chatModels.includes(model) || reasoningModels.includes(model)) {
+  if (baseURL || chatModels.includes(model) || reasoningModels.includes(model)) {
     response = await openai.chat.completions.create({
       model,
       ...!isReasoning && { temperature: 0.7 },
@@ -6557,11 +6555,14 @@ var InputModal = class extends import_obsidian.Modal {
   onOpen() {
     let { contentEl, containerEl, modalEl } = this;
     contentEl.createEl("h1", { text: "Prompt configuration" });
-    new import_obsidian.Setting(contentEl).setName("Model").addDropdown(
-      (dropdown) => dropdown.addOptions(Object.fromEntries(allAvailableModels().map((k) => [k, k]))).setValue(this.configuration.model).onChange(async (value) => {
-        reasoningEffortSetting.setDisabled(!availableReasoningModels().includes(value));
-        this.configuration.model = value;
-      })
+    new import_obsidian.Setting(contentEl).setName("Model").addText(
+      (text) => (
+        // <-- CAMBIO AQUÍ
+        text.setPlaceholder("gpt-4o").setValue(this.configuration.model).onChange(async (value) => {
+          reasoningEffortSetting.setDisabled(!availableReasoningModels().includes(value));
+          this.configuration.model = value;
+        })
+      )
     );
     const reasoningEffortSetting = new import_obsidian.Setting(contentEl).setName("Reasoning Effort").addDropdown(
       (dropdown) => dropdown.addOptions(Object.fromEntries(["low", "medium", "high"].map((k) => [k, k]))).setValue(this.configuration.reasoningEffort).onChange(async (value) => {
@@ -6631,8 +6632,14 @@ var FlashcardsSettingsTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Model").setDesc("Which language model to use").addDropdown(
-      (dropdown) => dropdown.addOptions(Object.fromEntries(allAvailableModels().map((k) => [k, k]))).setValue(this.plugin.settings.model).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("API Base URL (Opcional)").setDesc("Sobrescribir la URL base para usar proxies o modelos locales (ej. Ollama, Groq).").addText(
+      (text) => text.setPlaceholder("https.api.openai.com/v1").setValue(this.plugin.settings.baseURL).onChange(async (value) => {
+        this.plugin.settings.baseURL = value.endsWith("/") ? value.slice(0, -1) : value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Model").setDesc("Qu\xE9 modelo de lenguaje usar (ej. gpt-4o, llama3, etc.)").addText(
+      (text) => text.setPlaceholder("gpt-4o-mini").setValue(this.plugin.settings.model).onChange(async (value) => {
         this.plugin.settings.model = value;
         reasoningEffortSetting.setDisabled(!availableReasoningModels().includes(value));
         await this.plugin.saveSettings();
@@ -6704,6 +6711,7 @@ var FlashcardsSettingsTab = class extends import_obsidian2.PluginSettingTab {
 // src/main.ts
 var DEFAULT_SETTINGS = {
   apiKey: "",
+  baseURL: "",
   model: "gpt-4o",
   inlineSeparator: "::",
   multilineSeparator: "?",
@@ -6760,6 +6768,7 @@ var FlashcardsLLMPlugin = class extends import_obsidian3.Plugin {
     this.addSettingTab(new FlashcardsSettingsTab(this.app, this));
   }
   async onGenerateFlashcards(editor, view, configuration, multiline = false) {
+    const baseURL = configuration.baseURL;
     const apiKey = configuration.apiKey;
     if (!apiKey) {
       new import_obsidian3.Notice("API key is not set in plugin settings");
@@ -6794,6 +6803,7 @@ var FlashcardsLLMPlugin = class extends import_obsidian3.Plugin {
       const generatedFlashcards = await generateFlashcards(
         currentText,
         apiKey,
+        baseURL,
         model,
         sep,
         flashcardsCount,
