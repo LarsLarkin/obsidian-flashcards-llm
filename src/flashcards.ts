@@ -80,11 +80,29 @@ export async function* generateFlashcards(
 	stream: boolean = true
 ) {
 
-	const openai = new OpenAI({
-		apiKey: apiKey,
-		dangerouslyAllowBrowser: true,
-		baseURL: baseURL || undefined
-	});
+// Define the custom fetch function
+const customFetch: typeof fetch = (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+
+    // Only modify headers if the URL is localhost
+    if (url.includes("localhost") && init?.headers) {
+        const headers = new Headers(init.headers);
+        // Remove conflicting headers
+        headers.delete('x-stainless-timeout');
+        headers.delete('x-stainless-retry-count');
+        // Modify the original 'init' object
+        init = { ...init, headers };
+    }
+    // Call the original fetch function with the headers (modified or not)
+    return fetch(input, init);
+};
+
+const openai = new OpenAI({
+    apiKey: apiKey,
+    dangerouslyAllowBrowser: true,
+    baseURL: baseURL || undefined,
+    fetch: customFetch 
+});
 
 	const cleanedText = text.replace(/<!--.*-->[\n]?/g, "");
 	const flashcardText = cleanedText
@@ -122,7 +140,9 @@ the original task): ${additionalInfo}`
 			type: "text",
 		},
 		stream: stream,
-	}, { timeout: 60000 });
+		}, 
+		baseURL?.includes("localhost") ? {} : { timeout: 60000 } 
+		);
 		if (!stream) {
 			response = response as OpenAI.ChatCompletion
 			response = response?.choices[0]?.message?.content?.trim() ?? null;

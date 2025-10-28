@@ -6487,10 +6487,22 @@ Rules:
 }
 async function* generateFlashcards(text, apiKey, baseURL, model = "gpt-4o", sep = "::", flashcardsCount = 3, additionalInfo = "", maxTokens = 300, multiline = false, reasoningEffort, stream = true) {
   var _a3, _b, _c, _d, _e, _f;
+  const customFetch = (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url.includes("localhost") && (init == null ? void 0 : init.headers)) {
+      const headers = new Headers(init.headers);
+      headers.delete("x-stainless-timeout");
+      headers.delete("x-stainless-retry-count");
+      init = { ...init, headers };
+    }
+    return fetch(input, init);
+  };
   const openai = new OpenAI({
     apiKey,
     dangerouslyAllowBrowser: true,
-    baseURL: baseURL || void 0
+    baseURL: baseURL || void 0,
+    fetch: customFetch
+    // <--- AÑADE ESTA LÍNEA
   });
   const cleanedText = text.replace(/<!--.*-->[\n]?/g, "");
   const flashcardText = cleanedText;
@@ -6505,23 +6517,26 @@ Additional instructions for the task (ignore anything unrelated to the original 
   const isReasoning = reasoningModels.includes(model);
   let response = null;
   if (baseURL || chatModels.includes(model) || reasoningModels.includes(model)) {
-    response = await openai.chat.completions.create({
-      model,
-      ...!isReasoning && { temperature: 0.7 },
-      ...isReasoning && { reasoning_effort: "low" },
-      max_completion_tokens: maxTokens,
-      frequency_penalty: 0,
-      presence_penalty: 0,
-      top_p: 1,
-      messages: [
-        { role: "system", content: basePrompt },
-        { role: "user", content: flashcardText }
-      ],
-      response_format: {
-        type: "text"
+    response = await openai.chat.completions.create(
+      {
+        model,
+        ...!isReasoning && { temperature: 0.7 },
+        ...isReasoning && { reasoning_effort: "low" },
+        max_completion_tokens: maxTokens,
+        frequency_penalty: 0,
+        presence_penalty: 0,
+        top_p: 1,
+        messages: [
+          { role: "system", content: basePrompt },
+          { role: "user", content: flashcardText }
+        ],
+        response_format: {
+          type: "text"
+        },
+        stream
       },
-      stream
-    }, { timeout: 6e4 });
+      (baseURL == null ? void 0 : baseURL.includes("localhost")) ? {} : { timeout: 6e4 }
+    );
     if (!stream) {
       response = response;
       response = (_d = (_c = (_b = (_a3 = response == null ? void 0 : response.choices[0]) == null ? void 0 : _a3.message) == null ? void 0 : _b.content) == null ? void 0 : _c.trim()) != null ? _d : null;
@@ -6556,13 +6571,10 @@ var InputModal = class extends import_obsidian.Modal {
     let { contentEl, containerEl, modalEl } = this;
     contentEl.createEl("h1", { text: "Prompt configuration" });
     new import_obsidian.Setting(contentEl).setName("Model").addText(
-      (text) => (
-        // <-- CAMBIO AQUÍ
-        text.setPlaceholder("gpt-4o").setValue(this.configuration.model).onChange(async (value) => {
-          reasoningEffortSetting.setDisabled(!availableReasoningModels().includes(value));
-          this.configuration.model = value;
-        })
-      )
+      (text) => text.setPlaceholder("gpt-4o").setValue(this.configuration.model).onChange(async (value) => {
+        reasoningEffortSetting.setDisabled(!availableReasoningModels().includes(value));
+        this.configuration.model = value;
+      })
     );
     const reasoningEffortSetting = new import_obsidian.Setting(contentEl).setName("Reasoning Effort").addDropdown(
       (dropdown) => dropdown.addOptions(Object.fromEntries(["low", "medium", "high"].map((k) => [k, k]))).setValue(this.configuration.reasoningEffort).onChange(async (value) => {
@@ -6632,13 +6644,13 @@ var FlashcardsSettingsTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("API Base URL (Opcional)").setDesc("Sobrescribir la URL base para usar proxies o modelos locales (ej. Ollama, Groq).").addText(
+    new import_obsidian2.Setting(containerEl).setName("API Base URL (Optional)").setDesc("Override the base URL to use proxies or local models (e.g. Ollama, Groq).").addText(
       (text) => text.setPlaceholder("https.api.openai.com/v1").setValue(this.plugin.settings.baseURL).onChange(async (value) => {
         this.plugin.settings.baseURL = value.endsWith("/") ? value.slice(0, -1) : value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Model").setDesc("Qu\xE9 modelo de lenguaje usar (ej. gpt-4o, llama3, etc.)").addText(
+    new import_obsidian2.Setting(containerEl).setName("Model").setDesc("Which language model to use (e.g. gpt-4o, llama3, etc.)").addText(
       (text) => text.setPlaceholder("gpt-4o-mini").setValue(this.plugin.settings.model).onChange(async (value) => {
         this.plugin.settings.model = value;
         reasoningEffortSetting.setDisabled(!availableReasoningModels().includes(value));
